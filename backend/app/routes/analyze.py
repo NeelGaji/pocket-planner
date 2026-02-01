@@ -2,18 +2,19 @@
 Analyze Route
 
 POST /analyze - Analyze a room image and extract furniture objects.
-Note: Vision logic is a placeholder for Developer A.
+Uses Gemini 2.5 Flash for vision analysis with object detection.
 """
 
 from fastapi import APIRouter, HTTPException, UploadFile, File
-from typing import Optional
 import base64
+import logging
 
 from app.models.api import AnalyzeRequest, AnalyzeResponse
-from app.models.room import RoomObject, RoomDimensions, ObjectType
 from app.core.constraints import check_all_hard_constraints
+from app.core.vision_service import analyze_room_image
 
 
+logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/analyze", tags=["Analysis"])
 
 
@@ -23,74 +24,43 @@ async def analyze_room(request: AnalyzeRequest) -> AnalyzeResponse:
     Analyze a room image and extract furniture objects.
     
     This endpoint:
-    1. Sends image to Gemini Vision (placeholder)
-    2. Extracts room dimensions and objects
-    3. Returns structured layout data
-    
-    Note: Vision logic will be implemented by Developer A.
-    Currently returns mock data for testing.
+    1. Sends image to Gemini 2.5 Flash Vision
+    2. Extracts room dimensions and detected objects with bounding boxes
+    3. Checks for constraint violations
+    4. Returns structured layout data
     """
-    # === PLACEHOLDER: Developer A will implement Gemini Vision call ===
-    # For now, return mock data to allow frontend development
-    
-    mock_objects = [
-        RoomObject(
-            id="door_1",
-            label="door",
-            bbox=[0, 150, 20, 80],
-            type=ObjectType.STRUCTURAL,
-            orientation=0
-        ),
-        RoomObject(
-            id="window_1",
-            label="window",
-            bbox=[250, 0, 50, 20],
-            type=ObjectType.STRUCTURAL,
-            orientation=0
-        ),
-        RoomObject(
-            id="bed_1",
-            label="bed",
-            bbox=[100, 200, 120, 180],
-            type=ObjectType.MOVABLE,
-            orientation=0
-        ),
-        RoomObject(
-            id="desk_1",
-            label="desk",
-            bbox=[50, 50, 80, 50],
-            type=ObjectType.MOVABLE,
-            orientation=0
-        ),
-        RoomObject(
-            id="chair_1",
-            label="chair",
-            bbox=[60, 110, 40, 40],
-            type=ObjectType.MOVABLE,
-            orientation=0
-        ),
-    ]
-    
-    mock_dimensions = RoomDimensions(
-        width_estimate=300,
-        height_estimate=400
-    )
-    
-    # Check for initial issues
-    violations = check_all_hard_constraints(
-        mock_objects,
-        mock_dimensions.width_estimate,
-        mock_dimensions.height_estimate
-    )
-    
-    detected_issues = [v.description for v in violations]
-    
-    return AnalyzeResponse(
-        room_dimensions=mock_dimensions,
-        objects=mock_objects,
-        detected_issues=detected_issues,
-        message=f"Detected {len(mock_objects)} objects. {len(detected_issues)} issue(s) found."
-    )
+    try:
+        # Call Gemini Vision
+        vision_output = await analyze_room_image(request.image_base64)
+        
+        # Check for initial issues
+        violations = check_all_hard_constraints(
+            vision_output.objects,
+            vision_output.room_dimensions.width_estimate,
+            vision_output.room_dimensions.height_estimate
+        )
+        
+        detected_issues = [v.description for v in violations]
+        
+        return AnalyzeResponse(
+            room_dimensions=vision_output.room_dimensions,
+            objects=vision_output.objects,
+            detected_issues=detected_issues,
+            message=f"Detected {len(vision_output.objects)} objects. {len(detected_issues)} issue(s) found."
+        )
+        
+    except ValueError as e:
+        # Configuration errors (missing API key, etc.)
+        logger.error(f"Configuration error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+        
+    except Exception as e:
+        # Gemini API errors
+        logger.error(f"Vision analysis failed: {e}")
+        raise HTTPException(
+            status_code=500, 
+            detail=f"Vision analysis failed: {str(e)}"
+        )
 
 
 @router.post("/upload", response_model=AnalyzeResponse)

@@ -30,11 +30,13 @@ class Settings(BaseSettings):
     
     # Google AI (for Developer A)
     google_api_key: str = ""
-    gemini_model: str = "gemini-1.5-pro"
+    gemini_model: str = "gemini-2.5-flash"
     
     class Config:
-        env_file = ".env"
+        # Search both current dir and parent dir for .env
+        env_file = (".env", "../.env", "../../.env")
         env_file_encoding = "utf-8"
+        extra = "ignore"
 
 
 @lru_cache()
