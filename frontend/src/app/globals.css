@@ -1,0 +1,103 @@
+@import "tailwindcss";
+
+:root {
+  --color-background: theme(colors.slate.950);
+  --color-foreground: theme(colors.white);
+  --color-primary: theme(colors.blue.600);
+  --color-secondary: theme(colors.slate.600);
+  --color-accent: theme(colors.emerald.500);
+  --color-danger: theme(colors.red.500);
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --background: theme(colors.slate.950);
+    --foreground: theme(colors.white);
+  }
+}
+
+html {
+  color-scheme: dark;
+}
+
+body {
+  background: var(--color-background);
+  color: var(--color-foreground);
+  font-family: var(--font-sans), system-ui, sans-serif;
+}
+
+/* Custom scrollbar */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: theme(colors.slate.800);
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb {
+  background: theme(colors.slate.600);
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: theme(colors.slate.500);
+}
+
+/* Konva canvas styling */
+.konvajs-content {
+  border-radius: 0.75rem;
+}
+
+/* Loading animation */
+@keyframes pulse-ring {
+  0% {
+    transform: scale(0.8);
+    opacity: 0.5;
+  }
+  50% {
+    transform: scale(1);
+    opacity: 1;
+  }
+  100% {
+    transform: scale(0.8);
+    opacity: 0.5;
+  }
+}
+
+.pulse-ring {
+  animation: pulse-ring 2s ease-in-out infinite;
+}
+
+/* Gradient text */
+.gradient-text {
+  background: linear-gradient(135deg, theme(colors.blue.400), theme(colors.purple.400));
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+/* Glass effect */
+.glass {
+  background: rgba(15, 23, 42, 0.7);
+  backdrop-filter: blur(10px);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+/* Selection states */
+.selected-ring {
+  box-shadow: 0 0 0 2px theme(colors.blue.500), 0 0 20px theme(colors.blue.500 / 30%);
+}
+
+.locked-ring {
+  box-shadow: 0 0 0 2px theme(colors.emerald.500), 0 0 20px theme(colors.emerald.500 / 30%);
+}
