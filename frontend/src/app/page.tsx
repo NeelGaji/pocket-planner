@@ -49,7 +49,7 @@ const GENERATION_STEPS = [
   { label: 'Analyzing room layout', duration: 2000 },
   { label: 'Designing Productivity Focus', duration: 3000 },
   { label: 'Designing Cozy Retreat', duration: 3000 },
-  { label: 'Designing Creative Flow', duration: 3000 },
+  { label: 'Designing Space Optimized', duration: 3000 },
   { label: 'Generating preview images', duration: 4000 },
   { label: 'Finalizing layouts', duration: 2000 },
 ];
@@ -141,14 +141,15 @@ export default function PocketPlannerApp() {
   }, [state.image, analyze]);
 
   // Generate Layouts
+  // === Generate Layouts ===
+  // FIXED: locked_ids now includes ALL structural objects AND any user-locked objects
   const handleGenerateLayouts = useCallback(async () => {
     if (!state.roomDimensions || state.objects.length === 0) return;
 
-    setState(prev => ({ ...prev, generatingStep: 0 }));
-
     try {
+      // Collect locked IDs: structural objects + user-locked objects
       const lockedIds = state.objects
-        .filter(o => o.is_locked)
+        .filter(o => o.is_locked || o.type === 'structural')
         .map(o => o.id);
 
       const response = await optimize({
@@ -158,20 +159,17 @@ export default function PocketPlannerApp() {
         image_base64: state.image ? state.image.split(',')[1] : undefined,
       });
 
-      // Update state and transition to layouts stage
       setState(prev => ({
         ...prev,
         layoutVariations: response.variations,
         stage: 'layouts',
-        generatingStep: 0,
       }));
 
       toast.success(`Generated ${response.variations.length} layout options`);
     } catch (error) {
       toast.error(error instanceof Error ? error.message : 'Failed to generate layouts');
-      setState(prev => ({ ...prev, generatingStep: 0 }));
     }
-  }, [state.roomDimensions, state.objects, state.image, optimize]);
+  }, [state.roomDimensions, state.objects, optimize]);
 
   // Select Layout
   const handleSelectLayout = useCallback(async (variation: LayoutVariation) => {

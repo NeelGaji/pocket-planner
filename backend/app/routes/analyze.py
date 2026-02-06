@@ -13,7 +13,7 @@ import logging
 
 from app.models.api import AnalyzeRequest, AnalyzeResponse
 from app.core.constraints import check_all_hard_constraints
-from app.agents.vision_node import VisionAgent
+from app.agents.vision_node import VisionAgent, get_vision_agent
 
 # LangSmith tracing
 try:
@@ -47,7 +47,7 @@ async def analyze_room(request: AnalyzeRequest) -> AnalyzeResponse:
     """
     try:
         # Call Gemini Vision (via VisionAgent - also traced)
-        agent = VisionAgent()
+        agent = get_vision_agent()
         vision_output = await agent.analyze_room(request.image_base64)
         
         # Check for initial issues

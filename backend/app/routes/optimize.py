@@ -6,8 +6,11 @@ POST /optimize - Generate AI-powered layout variations with preview images.
 FULLY TRACED with LangSmith.
 
 FIXES APPLIED:
-1. Auto-populate locked_ids with all structural object IDs
+1. Auto-populate locked_ids with all structural object IDs AND is_locked objects
 2. Better error handling and validation
+3. "Creative" renamed to "Space Optimized" throughout
+
+Layout styles: Work Focused, Cozy, Space Optimized
 """
 
 import asyncio
@@ -41,8 +44,8 @@ async def optimize_layout(request: OptimizeRequest) -> OptimizeResponse:
     
     This endpoint:
     1. Takes current layout, locked objects, and ORIGINAL IMAGE
-    2. Auto-adds all structural objects to locked_ids
-    3. Generates 3 layout variations (Work Focused, Cozy, Creative)
+    2. Auto-adds all structural objects AND is_locked objects to locked_ids
+    3. Generates 3 layout variations (Work Focused, Cozy, Space Optimized)
     4. Creates photorealistic preview images by editing the original floor plan
     5. Returns variations with thumbnails for user selection
     
@@ -50,6 +53,7 @@ async def optimize_layout(request: OptimizeRequest) -> OptimizeResponse:
     """
     try:
         # STEP 1: Build complete locked_ids including ALL structural objects
+        # AND any objects with is_locked=True
         # This ensures structural objects are NEVER moved
         complete_locked_ids = set(request.locked_ids)
         
@@ -58,6 +62,10 @@ async def optimize_layout(request: OptimizeRequest) -> OptimizeResponse:
             if obj.type == ObjectType.STRUCTURAL:
                 complete_locked_ids.add(obj.id)
                 obj.is_locked = True  # Also mark as locked
+            
+            # Add any objects already marked as locked
+            if obj.is_locked:
+                complete_locked_ids.add(obj.id)
             
             # Mark user-locked objects
             if obj.id in request.locked_ids:
@@ -82,6 +90,7 @@ async def optimize_layout(request: OptimizeRequest) -> OptimizeResponse:
         designer = InteriorDesignerAgent()
         
         # STEP 4: Generate variations WITH preview images
+        # Styles: Work Focused, Cozy, Space Optimized
         variations_data = await designer.generate_layout_variations(
             current_layout=request.current_layout,
             room_dims=request.room_dimensions,

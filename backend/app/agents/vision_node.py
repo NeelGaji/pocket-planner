@@ -10,6 +10,7 @@ import base64
 import io
 from typing import List, Optional
 from PIL import Image
+import functools
 from google import genai
 from google.genai import types
 
@@ -267,3 +268,12 @@ class VisionAgent:
             objects=objects,
             wall_bounds=wall_bounds
         )
+
+
+@functools.lru_cache()
+def get_vision_agent() -> VisionAgent:
+    """
+    Get a singleton instance of ValidAgent.
+    Cached to avoid re-initializing the Gemini client on every request.
+    """
+    return VisionAgent()

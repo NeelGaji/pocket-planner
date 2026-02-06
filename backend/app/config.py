@@ -32,7 +32,7 @@ class Settings(BaseSettings):
     # Google AI
     google_api_key: str = ""
     model_name: str = "gemini-2.5-pro"
-    image_model_name: str = "gemini-2.5-flash-preview-05-20"
+    image_model_name: str = "gemini-2.5-flash-image"
     
     # LangSmith Tracing
     langchain_tracing_v2: bool = True

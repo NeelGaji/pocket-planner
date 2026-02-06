@@ -75,8 +75,8 @@ export function OptimizePanel({
                             <Palette className="w-4 h-4 text-violet-600" />
                         </div>
                         <div>
-                            <div className="text-sm font-medium text-violet-800">Creative Flow</div>
-                            <div className="text-xs text-violet-600/70">Diagonal, unconventional</div>
+                            <div className="text-sm font-medium text-violet-800">Space Optimized</div>
+                            <div className="text-xs text-violet-600/70">Perimeter layout, spacious</div>
                         </div>
                     </div>
                 </div>
