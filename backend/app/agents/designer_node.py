@@ -688,7 +688,7 @@ Describe WHERE each piece goes relative to walls, other furniture, and structura
         """
         Generate a layout preview by telling Gemini ONLY what changed.
         
-        Instead of listing all 13 items, we compute a diff between
+        Instead of listing all items, we compute a diff between
         current positions and the plan, then give Gemini 3-6 short
         move instructions. Image editing models handle this much better
         than a wall of text with 13 simultaneous repositions.
