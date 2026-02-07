@@ -12,6 +12,8 @@ ALL FIXES CONSOLIDATED:
 8. Post-plan validation against structural objects
 9. Wall objects filtered from structural list
 10. Debug logging for all inputs/outputs
+11. Diff-based image prompt (Option A) — only describe what CHANGED
+12. Null-safe response handling for image generation
 """
 
 import json
@@ -27,7 +29,6 @@ from google.genai import types
 from app.config import get_settings
 from app.models.state import AgentState
 from app.models.room import RoomObject, RoomDimensions, ObjectType
-from app.core.scoring import score_layout
 
 try:
     from langsmith import traceable
@@ -405,16 +406,91 @@ class InteriorDesignerAgent:
         return warnings
 
     def _build_reinforcement(self, style_key: str, spec: Dict, window_wall: str, door_wall: str) -> str:
-        """Auto-generate image reinforcement from the technical_spec.
-        This ensures the image prompt always matches the spec exactly."""
+        """Auto-generate image reinforcement from the technical_spec."""
         tech = spec.get("technical_spec", {})
         lines = [f"⚠️ {spec['name'].upper()} — KEY RULES FOR IMAGE GENERATION:"]
         for key, value in tech.items():
-            # Replace generic wall references with actual detected walls
             rule = value.replace("{window_wall}", window_wall).replace("{door_wall}", door_wall)
             lines.append(f"- {rule}")
         lines.append("- The output MUST look visibly DIFFERENT from the input image.")
         return "\n".join(lines)
+
+    def _describe_current_position(self, obj_dict: dict) -> str:
+        """Describe where a movable object currently sits, using pixel bbox."""
+        pw, ph = self._pixel_width, self._pixel_height
+        bbox = obj_dict["bbox"]
+        x, y, w, h = bbox
+        cx, cy = x + w / 2, y + h / 2
+
+        # Determine wall proximity
+        margin_x, margin_y = pw * 0.2, ph * 0.2
+        dist_top, dist_bot = y, ph - (y + h)
+        dist_left, dist_right = x, pw - (x + w)
+        min_dist = min(dist_top, dist_bot, dist_left, dist_right)
+
+        if min_dist == dist_left and dist_left < margin_x:
+            return "against the west (left) wall"
+        elif min_dist == dist_right and dist_right < margin_x:
+            return "against the east (right) wall"
+        elif min_dist == dist_top and dist_top < margin_y:
+            return "against the north (top) wall"
+        elif min_dist == dist_bot and dist_bot < margin_y:
+            return "against the south (bottom) wall"
+
+        # Fallback: quadrant
+        x_pos = "left" if cx < pw * 0.33 else ("center" if cx < pw * 0.66 else "right")
+        y_pos = "top" if cy < ph * 0.33 else ("middle" if cy < ph * 0.66 else "bottom")
+        return f"in the {y_pos}-{x_pos} area"
+
+    def _compute_move_instructions(
+        self, layout_plan: Dict, movable_objects: List[dict]
+    ) -> Tuple[List[str], List[str]]:
+        """
+        Compare each movable object's CURRENT position (from bbox) against
+        the plan's target position (semantic text). Produce short move
+        instructions for items that clearly changed, and a keep-list for
+        items that stayed roughly in place.
+
+        Returns: (move_lines, keep_labels)
+        """
+        placement = layout_plan.get("furniture_placement", {})
+        obj_lookup = {o["id"]: o for o in movable_objects}
+
+        move_lines = []
+        keep_labels = []
+
+        for furn_id, target_desc in placement.items():
+            obj = obj_lookup.get(furn_id)
+            if not obj:
+                continue
+
+            current_desc = self._describe_current_position(obj)
+            label = obj["label"]
+            target_lower = target_desc.lower()
+
+            # Heuristic: did the wall change?
+            current_wall_kw = None
+            for kw in ["west", "east", "north", "south", "left", "right", "top", "bottom"]:
+                if kw in current_desc.lower():
+                    current_wall_kw = kw
+                    break
+
+            target_wall_kw = None
+            for kw in ["west", "east", "north", "south", "left", "right", "top", "bottom",
+                        "center", "foot of", "opposite", "between"]:
+                if kw in target_lower:
+                    target_wall_kw = kw
+                    break
+
+            # If the target mentions a clearly different wall or position keyword, it moved
+            same_wall = (current_wall_kw and target_wall_kw and current_wall_kw == target_wall_kw)
+
+            if same_wall:
+                keep_labels.append(label)
+            else:
+                move_lines.append(f"- Move the {label} ({furn_id}) → {target_desc}")
+
+        return move_lines, keep_labels
 
     # ========================================================================
     # VALIDATION — refine plan against actual room image
@@ -602,79 +678,60 @@ Describe WHERE each piece goes relative to walls, other furniture, and structura
         return result
 
     # ========================================================================
-    # IMAGE GENERATION
+    # IMAGE GENERATION — DIFF-BASED (Option A)
     # ========================================================================
     @traceable(name="generate_layout_image", run_type="llm", tags=["gemini", "image"])
     async def _generate_layout_image(
         self, layout_plan, style_key, spec, movable_objects, structural_objects,
         door_info, window_info, image_base64, movable_count, furniture_labels
     ) -> Optional[str]:
+        """
+        Generate a layout preview by telling Gemini ONLY what changed.
+        
+        Instead of listing all 13 items, we compute a diff between
+        current positions and the plan, then give Gemini 3-6 short
+        move instructions. Image editing models handle this much better
+        than a wall of text with 13 simultaneous repositions.
+        """
 
-        placement = layout_plan.get("furniture_placement", {})
-        placement_text = "\n".join([f"  • {k.upper()}: {v}" for k, v in placement.items()]) or "Follow zone arrangement"
-        zone_arr = layout_plan.get("zone_arrangement", {})
-        zone_text = "\n".join([f"  • {z}: {loc}" for z, loc in zone_arr.items()])
+        # Compute diff: what moved vs what stayed
+        move_lines, keep_labels = self._compute_move_instructions(layout_plan, movable_objects)
 
-        door_wall = door_info['wall'] if door_info else "unknown"
-        door_pct = f"at ~{door_info.get('position_on_wall_percent', 50):.0f}%" if door_info else ""
-        window_wall = window_info['wall'] if window_info else "unknown"
-        window_pct = f"at ~{window_info.get('position_on_wall_percent', 50):.0f}%" if window_info else ""
+        if not move_lines:
+            # Nothing moved — use full placement as fallback
+            placement = layout_plan.get("furniture_placement", {})
+            move_lines = [f"- {k}: {v}" for k, v in placement.items()]
 
-        furniture_list_str = ", ".join(furniture_labels)
-        structural_list = ", ".join([o["label"] for o in structural_objects])
-        exclusion_text = self._build_exclusion_zones(structural_objects)
+        moves_text = "\n".join(move_lines)
+        keep_text = f"Keep these items in their current positions: {', '.join(keep_labels)}." if keep_labels else ""
 
-        # Auto-generate reinforcement from technical_spec
-        reinforcement = self._build_reinforcement(style_key, spec, window_wall, door_wall)
-
-        # Count furniture types for anti-duplication
         from collections import Counter
         label_counts = Counter(furniture_labels)
         count_str = ", ".join([f"{count} {label}{'s' if count > 1 else ''}" for label, count in label_counts.items()])
 
-        prompt = f"""TASK: Edit this 2D top-down floor plan to show the "{spec['name']}" arrangement.
+        prompt = f"""Edit this 2D top-down floor plan. Rearrange furniture for the "{spec['name']}" style.
 
-╔══════════════════════════════════════════════════════════════╗
-║  ⚠️  STRICT RULES                                            ║
-╠══════════════════════════════════════════════════════════════╣
-║  1. Exactly {movable_count} movable items must appear.           ║
-║  2. REQUIRED: [{furniture_list_str}]                             ║
-║  3. DO NOT ADD or REMOVE any furniture.                      ║
-║  4. DOOR ({door_wall} {door_pct}): 2+ feet clear.               ║
-║  5. DO NOT MOVE: [{structural_list}]                             ║
-║  6. OUTPUT = 2D TOP-DOWN VIEW (not 3D).                      ║
-╚══════════════════════════════════════════════════════════════╝
+MOVES TO MAKE:
+{moves_text}
 
-⚠️ DO NOT DUPLICATE FURNITURE:
-- This room has exactly: {count_str}.
-- MOVE = ERASE from old spot + PLACE in new spot. Do NOT copy.
-- If the same item appears in TWO places, the output is INVALID.
-- COUNT each furniture type before finishing. Counts must match input.
+{keep_text}
 
-{exclusion_text}
+RULES:
+1. Output must be a 2D top-down floor plan (same style as input).
+2. MOVE means ERASE from old spot, PLACE in new spot. Do NOT duplicate.
+3. The room must have exactly {movable_count} movable items: {count_str}.
+4. Do NOT move structural elements (kitchen, bathroom, doors, windows).
+5. Do NOT add any new furniture that wasn't in the original.
 
-STYLE: {spec['name']}
-{layout_plan.get('description', spec['description'])}
-
-FURNITURE PLACEMENT — FOLLOW EXACTLY:
-{placement_text}
-
-ZONES:
-{zone_text}
-
-{reinforcement}
-
-DOOR CLEARANCE: {layout_plan.get('door_clearance', 'Keep door clear')}
-
-STRUCTURAL (fixed): Door={door_wall} {door_pct}, Window={window_wall} {window_pct}, Others=[{structural_list}]
-
-OUTPUT: Same 2D style as input, all {movable_count} items in their NEW positions, professional floor plan.
-Do NOT place furniture on top of kitchen appliances, bathroom fixtures, or any structural element.
-Edit the floor plan to show "{spec['name']}"."""
+Edit the floor plan now."""
 
         _save_debug_json(f"{self._debug_ts}_image_{style_key}_INPUT.json", {
-            "style_key": style_key, "reinforcement": reinforcement,
-            "exclusion_zones": exclusion_text, "full_prompt": prompt,
+            "style_key": style_key,
+            "move_count": len(move_lines),
+            "keep_count": len(keep_labels),
+            "moves": move_lines,
+            "keeps": keep_labels,
+            "full_prompt": prompt,
         })
 
         if "," in image_base64:
@@ -687,10 +744,14 @@ Edit the floor plan to show "{spec['name']}"."""
                 contents=[types.Part.from_bytes(data=image_data, mime_type="image/jpeg"), prompt],
                 config=types.GenerateContentConfig(response_modalities=["IMAGE", "TEXT"], temperature=0.3)
             )
-            if response.candidates:
+            # Null-safe response handling
+            if (response.candidates
+                    and response.candidates[0].content
+                    and response.candidates[0].content.parts):
                 for part in response.candidates[0].content.parts:
                     if hasattr(part, 'inline_data') and part.inline_data:
                         return base64.b64encode(part.inline_data.data).decode('utf-8')
+            print(f"[Designer] No image content in response for {style_key}")
             return None
         except Exception as e:
             print(f"[Designer] Image error {style_key}: {e}")
