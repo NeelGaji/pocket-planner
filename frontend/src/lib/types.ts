@@ -108,7 +108,7 @@ export function getObjectIcon(label: string): string {
 }
 
 // === App Stage ===
-export type AppStage = 'analyze' | 'layouts' | 'perspective' | 'chat';
+export type AppStage = 'analyze' | 'layouts' | 'perspective' | 'chat' | 'shop';
 
 // === Chat Edit Types ===
 export interface ChatEditRequest {
@@ -140,6 +140,39 @@ export interface PerspectiveRequest {
 
 export interface PerspectiveResponse {
   image_base64: string | null;
+  message: string;
+}
+
+export interface ShopRequest {
+  current_layout: RoomObject[];
+  total_budget: number;
+  perspective_image_base64?: string;
+}
+
+export interface ShopProduct {
+  title: string;
+  price: number | null;
+  price_raw: string;
+  link: string;
+  thumbnail: string;
+  source: string;
+  rating: number | null;
+  reviews: number | null;
+}
+
+export interface ShopItemResult {
+  furniture_id: string;
+  furniture_label: string;
+  search_query: string;
+  budget_allocated: number;
+  products: ShopProduct[];
+  error: string | null;
+}
+
+export interface ShopResponse {
+  items: ShopItemResult[];
+  total_estimated: number;
+  total_budget: number;
   message: string;
 }
 

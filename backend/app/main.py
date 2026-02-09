@@ -16,7 +16,7 @@ from fastapi.responses import JSONResponse
 
 from app.config import get_settings, setup_langsmith
 from app.models.api import HealthResponse, ErrorResponse
-from app.routes import analyze, optimize, chat, render
+from app.routes import analyze, optimize, chat, render, shop
 from app.core.exceptions import (
     PocketPlannerError,
     VisionExtractionError,
@@ -74,6 +74,7 @@ app.include_router(analyze.router, prefix=settings.api_prefix)
 app.include_router(optimize.router, prefix=settings.api_prefix)
 app.include_router(render.router, prefix=settings.api_prefix)
 app.include_router(chat.router, prefix=settings.api_prefix)
+app.include_router(shop.router, prefix=settings.api_prefix)
 
 
 # ============ Exception Handlers ============

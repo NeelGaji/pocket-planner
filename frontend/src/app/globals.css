@@ -156,3 +156,35 @@ h6 {
   cursor: not-allowed;
   transform: none;
 }
+
+/* SCANNING ANIMATION */
+@keyframes scan-vertical {
+  0% {
+    top: 0%;
+    opacity: 0;
+  }
+
+  15% {
+    opacity: 1;
+  }
+
+  85% {
+    opacity: 1;
+  }
+
+  100% {
+    top: 100%;
+    opacity: 0;
+  }
+}
+
+.animate-scan {
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: white;
+  box-shadow: 0 0 10px 2px rgba(255, 255, 255, 0.5);
+  animation: scan-vertical 2s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+  z-index: 10;
+}

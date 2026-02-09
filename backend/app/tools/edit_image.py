@@ -40,7 +40,7 @@ class EditImageTool:
         if not settings.google_api_key:
             raise ValueError("GOOGLE_API_KEY environment variable is not set")
         self.client = genai.Client(api_key=settings.google_api_key)
-        self.model = settings.image_model_name
+        self.model = settings.render_image_model_name
 
     @traceable(
         name="edit_image_tool.edit_floor_plan",

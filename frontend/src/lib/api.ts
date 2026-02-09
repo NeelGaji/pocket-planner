@@ -19,6 +19,8 @@ import type {
     PerspectiveResponse,
     ChatEditRequest,
     ChatEditResponse,
+    ShopRequest,
+    ShopResponse,
 } from './types';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
@@ -112,6 +114,18 @@ export async function generatePerspective(request: PerspectiveRequest): Promise<
 export async function chatEdit(request: ChatEditRequest): Promise<ChatEditResponse> {
     try {
         const response = await longApi.post<ChatEditResponse>('/chat/edit', request);
+        return response.data;
+    } catch (error) {
+        handleApiError(error);
+    }
+}
+
+/**
+ * Find products matching room furniture
+ */
+export async function shopProducts(request: ShopRequest): Promise<ShopResponse> {
+    try {
+        const response = await longApi.post<ShopResponse>('/shop', request);
         return response.data;
     } catch (error) {
         handleApiError(error);

@@ -45,6 +45,8 @@ class Settings(BaseSettings):
     langchain_api_key: str = ""
     langchain_project: str = "my first project"  # Your project name
     langchain_endpoint: str = "https://api.smith.langchain.com"
+
+    serpapi_key: str = ""
     
     class Config:
         env_file = (".env", "../.env", "../../.env")

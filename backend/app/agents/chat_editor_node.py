@@ -51,7 +51,7 @@ class ChatEditor:
             raise ValueError("GOOGLE_API_KEY not set in .env file")
         self.client = genai.Client(api_key=api_key)
         self.reasoning_model = settings.planning_model_name
-        self.image_model = settings.render_image_model_name
+        self.render_image_model_name = settings.render_image_model_name
         self.edit_tool = EditImageTool()
 
     @traceable(
@@ -398,7 +398,7 @@ Generate the edited room photograph with the {removed_label} removed."""
 
             response = await asyncio.to_thread(
                 self.client.models.generate_content,
-                model=self.image_model,
+                model=self.render_image_model_name,
                 contents=[
                     types.Part.from_bytes(data=image_data, mime_type="image/png"),
                     prompt
@@ -480,7 +480,7 @@ Generate the edited room photograph."""
 
             response = await asyncio.to_thread(
                 self.client.models.generate_content,
-                model=self.image_model,
+                model=self.render_image_model_name,
                 contents=[
                     types.Part.from_bytes(data=image_data, mime_type="image/png"),
                     prompt

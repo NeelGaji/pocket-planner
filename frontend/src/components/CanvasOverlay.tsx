@@ -123,8 +123,8 @@ export function CanvasOverlay({
                             height={dimensions.height}
                         />
 
-                        {/* Object Bounding Boxes */}
-                        {objects.map((obj) => {
+                        {/* Object Bounding Boxes - HIDDEN per user request */}
+                        {/* {objects.map((obj) => {
                             const isSelected = obj.id === selectedObjectId;
                             const colors = getObjectColor(obj, isSelected);
                             const strokeWidth = getStrokeWidth(obj.id);
@@ -133,10 +133,10 @@ export function CanvasOverlay({
                             return (
                                 <Group key={obj.id}>
                                     <Rect
-                                        x={x * scale}
-                                        y={y * scale}
-                                        width={width * scale}
-                                        height={height * scale}
+                                        x={obj.bbox[0] * scale}
+                                        y={obj.bbox[1] * scale}
+                                        width={obj.bbox[2] * scale}
+                                        height={obj.bbox[3] * scale}
                                         stroke={colors.stroke}
                                         fill={colors.fill}
                                         strokeWidth={strokeWidth}
@@ -148,7 +148,7 @@ export function CanvasOverlay({
                                     />
                                 </Group>
                             );
-                        })}
+                        })} */}
                     </Layer>
                 </Stage>
             </div>

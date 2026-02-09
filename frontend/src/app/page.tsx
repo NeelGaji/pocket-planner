@@ -9,11 +9,13 @@ import { OptimizePanel } from '@/components/OptimizePanel';
 import { LayoutSelector } from '@/components/LayoutSelector';
 import { PerspectiveView } from '@/components/PerspectiveView';
 import { ChatEditor } from '@/components/ChatEditor';
+import { ProductRecommendations } from '@/components/ProductRecommendations';
 import { GeneratingOverlay } from '@/components/GeneratingOverlay';
 import { useAnalyze } from '@/hooks/useAnalyze';
 import { useOptimize } from '@/hooks/useOptimize';
 import { usePerspective } from '@/hooks/usePerspective';
 import { useChatEdit } from '@/hooks/useChatEdit';
+import { useShop } from '@/hooks/useShop';
 import { Layout, Maximize2, Sparkles } from 'lucide-react';
 import type { RoomObject, RoomDimensions, LayoutVariation, AppStage } from '@/lib/types';
 
@@ -29,6 +31,7 @@ interface AppState {
   perspectiveImage: string | null;
   currentLayout: RoomObject[];
   generatingStep: number;
+  shopBudget: number;
 }
 
 const initialState: AppState = {
@@ -43,6 +46,7 @@ const initialState: AppState = {
   perspectiveImage: null,
   currentLayout: [],
   generatingStep: 0,
+  shopBudget: 1000,
 };
 
 // Generation steps for the loading animation
@@ -62,6 +66,7 @@ export default function PocketPlannerApp() {
   const { optimize, isLoading: isOptimizing } = useOptimize();
   const { generate: generatePerspective, isLoading: isGeneratingPerspective } = usePerspective();
   const { sendCommand, isLoading: isChatLoading, messages } = useChatEdit();
+  const { findProducts, isLoading: isShopping, data: shopData } = useShop();
 
   // Auto-load test image on mount
   useEffect(() => {
@@ -261,6 +266,29 @@ export default function PocketPlannerApp() {
   }, [state.roomDimensions, state.currentLayout, state.perspectiveImage, sendCommand]);
 
   // Reset
+  const handleContinueToShop = useCallback(() => {
+    setState(prev => ({ ...prev, stage: 'shop' }));
+  }, []);
+
+  const handleBackToChat = useCallback(() => {
+    setState(prev => ({ ...prev, stage: 'chat' }));
+  }, []);
+
+  const handleShopSearch = useCallback(async () => {
+    if (!state.currentLayout.length) return;
+    try {
+      await findProducts({
+        current_layout: state.currentLayout,
+        total_budget: state.shopBudget,
+        perspective_image_base64: state.perspectiveImage || undefined,
+      });
+      toast.success('Products found!');
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Product search failed');
+    }
+  }, [state.currentLayout, state.shopBudget, state.perspectiveImage, findProducts]);
+
+  // Reset
   const handleReset = useCallback(() => {
     setState(initialState);
   }, []);
@@ -299,17 +327,41 @@ export default function PocketPlannerApp() {
           />
         );
 
+      case 'shop':
+        return (
+          <ProductRecommendations
+            shopData={shopData}
+            isLoading={isShopping}
+            budget={state.shopBudget}
+            onBudgetChange={(b) => setState(prev => ({ ...prev, shopBudget: b }))}
+            onSearch={handleShopSearch}
+            onBack={handleBackToChat}
+            hasLayout={state.currentLayout.length > 0}
+          />
+        );
+
       case 'chat':
         return (
-          <ChatEditor
-            imageBase64={state.perspectiveImage}
-            layout={state.currentLayout}
-            roomDimensions={state.roomDimensions}
-            messages={messages}
-            isLoading={isChatLoading}
-            onSendCommand={handleChatCommand}
-            onBack={handleBackToPerspective}
-          />
+          <div className="space-y-4">
+            <ChatEditor
+              imageBase64={state.perspectiveImage}
+              layout={state.currentLayout}
+              roomDimensions={state.roomDimensions}
+              messages={messages}
+              isLoading={isChatLoading}
+              onSendCommand={handleChatCommand}
+              onBack={handleBackToPerspective}
+            />
+            <div className="text-center pt-4 border-t border-gray-100">
+              <button
+                onClick={handleContinueToShop}
+                className="px-6 py-3 bg-black text-white font-medium hover:bg-gray-800 transition-colors inline-flex items-center gap-2"
+              >
+                <span>🛒</span>
+                Shop Your Room
+              </button>
+            </div>
+          </div>
         );
 
       case 'analyze':
@@ -369,11 +421,17 @@ export default function PocketPlannerApp() {
                 ) : (
                   // analyzing state visualization
                   <div className="floor-plan-container p-4">
-                    <img
-                      src={state.image}
-                      alt="Floor plan"
-                      className="w-full h-auto rounded-none"
-                    />
+                    <div className="relative overflow-hidden rounded-lg inline-block w-full">
+                      <img
+                        src={state.image}
+                        alt="Floor plan"
+                        className="w-full h-auto rounded-none"
+                      />
+                      {/* Scanning Animation */}
+                      {state.isAnalyzing && (
+                        <div className="animate-scan"></div>
+                      )}
+                    </div>
                     <div className="text-center mt-6">
                       <button
                         onClick={handleAnalyze}
@@ -445,7 +503,7 @@ export default function PocketPlannerApp() {
           {/* Stage indicator - only show if image uploaded */}
           {state.image && (
             <div className="flex gap-2">
-              {['analyze', 'layouts', 'perspective', 'chat'].map((s) => (
+              {['analyze', 'layouts', 'perspective', 'chat', 'shop'].map((s) => (
                 <div
                   key={s}
                   className={`w-2 h-2 rounded-full transition-colors ${state.stage === s ? 'bg-black' : 'bg-gray-200'
