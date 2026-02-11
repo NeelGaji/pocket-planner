@@ -7,7 +7,6 @@ Includes LangSmith tracing setup for agent observability.
 
 import os
 from pydantic_settings import BaseSettings
-from pydantic import field_validator
 from functools import lru_cache
 
 
@@ -22,16 +21,13 @@ class Settings(BaseSettings):
     # API settings
     api_prefix: str = "/api/v1"
     
-    # CORS
-    cors_origins: list[str] = ["http://localhost:3000", "http://127.0.0.1:3000"]
+    # CORS - stored as comma-separated string for env var compatibility
+    cors_origins: str = "http://localhost:3000,http://127.0.0.1:3000"
     
-    @field_validator("cors_origins", mode="before")
-    @classmethod
-    def parse_cors_origins(cls, v):
-        """Accept comma-separated string or list for CORS origins."""
-        if isinstance(v, str):
-            return [origin.strip() for origin in v.split(",") if origin.strip()]
-        return v
+    @property
+    def cors_origins_list(self) -> list[str]:
+        """Parse cors_origins string into a list."""
+        return [origin.strip() for origin in self.cors_origins.split(",") if origin.strip()]
     
     # Optimization defaults
     default_max_iterations: int = 5
